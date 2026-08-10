@@ -1,0 +1,71 @@
+{
+  "name": "meticulous-inbox-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "vinext dev",
+    "radar:start": "node --env-file-if-exists=.env.local scripts/start-radar.mjs",
+    "build": "vinext build",
+    "start": "vinext start",
+    "test": "npm run test:unit && npm run build && node --test tests/rendered-html.test.mjs",
+    "test:unit": "tsx --test tests/core.test.ts && node --test tests/obsidian-indexer.test.mjs tests/collectors.test.mjs tests/sidecar.test.mjs tests/supervisor.test.mjs",
+    "collect:slack": "node --env-file-if-exists=.env.local collectors/slack.mjs",
+    "collect:gmail": "node --env-file-if-exists=.env.local collectors/gmail.mjs",
+    "collect:discord": "node --env-file-if-exists=.env.local collectors/discord.mjs",
+    "collect:obsidian": "node --env-file-if-exists=.env.local collectors/obsidian.mjs",
+    "sync:sources": "node --env-file-if-exists=.env.local scripts/sync-sources.mjs",
+    "sync:watch": "node --env-file-if-exists=.env.local scripts/sync-sources.mjs --watch",
+    "sidecar:text": "node --env-file-if-exists=.env.local scripts/run-sidecar.mjs",
+    "index:obsidian": "node --env-file-if-exists=.env.local scripts/index-obsidian.mjs",
+    "scope:obsidian": "node --env-file-if-exists=.env.local scripts/preview-obsidian-scope.mjs",
+    "upload:knowledge": "node --env-file-if-exists=.env.local scripts/upload-knowledge.mjs",
+    "doctor": "tsx scripts/doctor.ts",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.2",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.51.2",
+    "@eslint/js": "9.39.4",
+    "@next/eslint-plugin-next": "16.2.6",
+    "@tailwindcss/postcss": "4.2.1",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "@vitejs/plugin-react": "6.0.5",
+    "@vitejs/plugin-rsc": "0.5.26",
+    "drizzle-kit": "0.31.10",
+    "eslint": "9.39.4",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "eslint-plugin-react": "7.37.5",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "16.4.0",
+    "react-server-dom-webpack": "19.2.8",
+    "tailwindcss": "4.2.1",
+    "tsx": "^4.23.12",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.67.0",
+    "vinext": "1.0.0-beta.5",
+    "vite": "8.2.1",
+    "wrangler": "4.120.1"
+  },
+  "overrides": {
+    "@babel/core": "7.29.7",
+    "fast-uri": "3.1.5",
+    "js-yaml": "4.3.1",
+    "minimatch@3.1.5": {
+      "brace-expansion": "1.1.18"
+    },
+    "minimatch@10.2.5": {
+      "brace-expansion": "5.0.9"
+    }
+  },
+  "type": "module"
+}

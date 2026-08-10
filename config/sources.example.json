@@ -1,0 +1,33 @@
+{
+  "owner": {
+    "expectedEmail": "owner@meticuloushome.com",
+    "timezone": "America/Mexico_City"
+  },
+  "slack": {
+    "mode": "all-accessible",
+    "includeDirectMessages": true,
+    "includeGroupDirectMessages": true,
+    "includeMentions": true,
+    "includeParticipatedThreads": true,
+    "includeBots": false,
+    "initialLookbackDays": 90,
+    "excludedChannelIds": []
+  },
+  "gmail": {
+    "inboxQuery": "in:inbox -category:promotions -in:spam -in:trash",
+    "intercomQuery": "from:intercom newer_than:30d",
+    "initialLookbackDays": 90
+  },
+  "discord": {
+    "useExistingReadOnlyArchive": true,
+    "semanticSearch": false,
+    "initialLookbackDays": 90,
+    "maxSearchRequests": 1000
+  },
+  "obsidian": {
+    "includeNestedRepositories": false,
+    "includedFolders": [],
+    "excludedFolders": [".obsidian", ".git", ".trash"],
+    "maxFileBytes": 2097152
+  }
+}

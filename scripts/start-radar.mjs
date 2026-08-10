@@ -2,6 +2,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
+import { loadLocalSettingsEnvironment } from "./lib/local-settings.mjs";
 import { restrictedSidecarArguments, restrictedSidecarEnvironment } from "./lib/sidecar-launch.mjs";
 import {
   generatorLaunchPlan,
@@ -13,9 +14,10 @@ import {
   webArguments,
 } from "./lib/radar-supervisor.mjs";
 
-const runtime = localRadarRuntime(process.env);
-const generator = generatorLaunchPlan(process.env);
-const watcher = sourceWatcherLaunchPlan(process.env);
+const environment = loadLocalSettingsEnvironment(process.env);
+const runtime = localRadarRuntime(environment);
+const generator = generatorLaunchPlan(environment);
+const watcher = sourceWatcherLaunchPlan(environment);
 const children = new Map();
 let stopping = false;
 
@@ -23,10 +25,10 @@ function log(event, details = {}) {
   console.log(JSON.stringify({ event, ...details }));
 }
 
-function launch(label, command, args, environment = process.env) {
+function launch(label, command, args, childEnvironment = environment) {
   const child = spawn(command, args, {
     cwd: process.cwd(),
-    env: environment,
+    env: childEnvironment,
     stdio: "inherit",
     windowsHide: true,
   });
@@ -79,7 +81,7 @@ try {
       "restricted-generator",
       process.execPath,
       restrictedSidecarArguments(sidecarScript),
-      restrictedSidecarEnvironment(process.env),
+      restrictedSidecarEnvironment(environment),
     );
   } else {
     log("radar-component-skipped", { component: "restricted-generator", missing: generator.missing, issues: generator.issues });

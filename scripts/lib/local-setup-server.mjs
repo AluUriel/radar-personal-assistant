@@ -108,8 +108,26 @@ export function createLocalSetupServer({
   folderPicker = pickWindowsFolder,
 } = {}) {
   if (!secret?.trim()) throw new Error("RADAR_SETUP_SECRET is required");
+  const radarOrigin = new URL(environment.RADAR_URL?.trim() || "http://localhost:3000");
+  const trustedOrigins = new Set([
+    radarOrigin.origin,
+    `${radarOrigin.protocol}//${radarOrigin.hostname === "localhost" ? "127.0.0.1" : "localhost"}${radarOrigin.port ? `:${radarOrigin.port}` : ""}`,
+  ]);
   return http.createServer(async (request, response) => {
-    if (!sameSecret(secret, bearerToken(request))) {
+    const origin = request.headers.origin ?? "";
+    const trustedBrowser = trustedOrigins.has(origin);
+    if (trustedBrowser) {
+      response.setHeader("access-control-allow-origin", origin);
+      response.setHeader("access-control-allow-methods", "GET, PATCH, POST, OPTIONS");
+      response.setHeader("access-control-allow-headers", "content-type");
+      response.setHeader("vary", "Origin");
+    }
+    if (request.method === "OPTIONS") {
+      response.writeHead(trustedBrowser ? 204 : 403);
+      response.end();
+      return;
+    }
+    if (!sameSecret(secret, bearerToken(request)) && !trustedBrowser) {
       send(response, 401, { error: "not-authorized" });
       return;
     }
@@ -124,12 +142,20 @@ export function createLocalSetupServer({
         return;
       }
       if (request.method === "PATCH" && url.pathname === "/connections") {
+        if (!request.headers["content-type"]?.startsWith("application/json")) {
+          send(response, 415, { error: "json-required" });
+          return;
+        }
         const body = await readJson(request);
         updateLocalSettings({ values: body.values, secrets: body.secrets }, { environment, codec });
         send(response, 200, { ...buildConnectionStatus(environment, { codec }), restartRequired: true });
         return;
       }
       if (request.method === "POST" && url.pathname === "/folders/obsidian") {
+        if (!request.headers["content-type"]?.startsWith("application/json")) {
+          send(response, 415, { error: "json-required" });
+          return;
+        }
         const selected = folderPicker();
         send(response, 200, { selected: selected || null });
         return;

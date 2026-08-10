@@ -13,7 +13,7 @@ const codec = {
 test("the loopback setup service requires its bearer secret and never returns stored values", async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "radar-setup-"));
   const server = createLocalSetupServer({
-    environment: { RADAR_CONFIG_DIR: directory },
+    environment: { RADAR_CONFIG_DIR: directory, RADAR_URL: "http://localhost:3000" },
     secret: "broker-secret",
     codec,
     folderPicker: () => "C:\\Notes\\Vault",
@@ -23,6 +23,11 @@ test("the loopback setup service requires its bearer secret and never returns st
   const origin = `http://127.0.0.1:${address.port}`;
   try {
     assert.equal((await fetch(`${origin}/connections`)).status, 401);
+    assert.equal((await fetch(`${origin}/connections`, { headers: { origin: "https://malicious.example" } })).status, 401);
+    const browserStatus = await fetch(`${origin}/connections`, { headers: { origin: "http://localhost:3000" } });
+    assert.equal(browserStatus.status, 200);
+    assert.equal(browserStatus.headers.get("access-control-allow-origin"), "http://localhost:3000");
+    assert.equal((await fetch(`${origin}/connections`, { method: "PATCH", headers: { origin: "http://localhost:3000", "content-type": "text/plain" }, body: "{}" })).status, 415);
     const headers = { authorization: "Bearer broker-secret", "content-type": "application/json" };
     const saved = await fetch(`${origin}/connections`, {
       method: "PATCH",

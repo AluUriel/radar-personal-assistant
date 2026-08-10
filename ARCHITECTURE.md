@@ -1,5 +1,11 @@
 # Radar architecture
 
+## Local connection control plane
+
+The normal setup path does not use a populated `.env.local`. `radar:start` loads `%LOCALAPPDATA%\Radar\settings.json`, where secret fields are encrypted with Windows DPAPI for the current user. It then starts a Node loopback setup service before the web runtime. The browser can read redacted status and submit JSON changes only from Radar's exact local origin; the supervisor uses a separate random bearer secret. Neither path returns stored credential values.
+
+The local setup service also owns native operating-system actions such as the Obsidian folder picker. The Cloudflare-style web runtime never receives filesystem permission or direct DPAPI access. Saved settings take effect after a Radar restart, and saving configuration never starts source ingestion by itself.
+
 Radar is a single-user, read-first assistant for requests arriving through Slack, Gmail/Intercom, and Discord. The UI is intentionally separate from source credentials and from the text generator.
 
 ## Data flow

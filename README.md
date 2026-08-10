@@ -10,16 +10,16 @@ The current build is a working local application backed by D1/SQLite. It include
 
 ```powershell
 npm install
-Copy-Item .env.example .env.local
-npm run doctor
 npm run radar:start
 ```
 
 Open `http://localhost:3000`.
 
-`npm run radar:start` is the normal local entry point. It starts the web app (or reuses a healthy Radar instance already running at `RADAR_URL`), waits for it, initializes D1 idempotently, starts the permission-restricted generator only when all of its settings are valid, and starts the recurring sync watcher only when at least one source is fully configured. `Ctrl+C` shuts down every child process it started. It never seeds demo content unless `RADAR_SEED_SYNTHETIC_DEMO=true`; use `npm run dev` when you intentionally want only the web development server.
+`npm run radar:start` is the normal local entry point. It creates the local encrypted settings store, starts the Connections service and web app, initializes D1 idempotently, starts the permission-restricted generator only when all of its settings are valid, and starts recurring sync only when a source is fully configured. `Ctrl+C` shuts down every child process it started. It never seeds demo content unless `RADAR_SEED_SYNTHETIC_DEMO=true`; use `npm run dev` only when you intentionally do not need the Connections service.
 
-`.env.local` is ignored by Git. The web app, collectors, knowledge uploader, and isolated generator load it locally; secret values must never be committed. `npm run doctor` displays only missing setting names and local validation problems. A configured source is still treated as unverified until its collector confirms the exact owner identity and records scan coverage.
+Open the **Connections** panel from the top-right menu. Normal setup does not use `.env`: public configuration and DPAPI-encrypted secrets are stored in `%LOCALAPPDATA%\Radar\settings.json`, outside this repository and OneDrive. Encryption is bound to the current Windows user. The browser receives only non-secret fields and `stored` booleans, never credential values. `.env.example` remains available only for advanced runtime overrides.
+
+A configured source is still treated as unverified until its collector confirms the exact owner identity and records scan coverage. Saving a connection does not read messages; finish every desired connection, restart Radar once, and review the planned first sync before authorizing ingestion.
 
 ## Current capabilities
 
@@ -76,17 +76,17 @@ Secrets are read from the environment and are never placed in command output, br
 
 After approval, `npm run collect:obsidian` performs indexing and upload in one read-only operation. It records complete or partial source coverage in Radar and is automatically included in `sync:sources`, `sync:watch`, and `radar:start`. An unapproved manifest stops the collector before any note body is read.
 
-## Connect Slack, Gmail, and Discord
+## Connect Slack, Gmail, Discord, and Obsidian
 
-Copy `.env.example` to `.env.local`; do not commit populated values. Run `npm run doctor` after each setup change. Both collectors call a profile endpoint first and stop before reading content when the returned email does not equal `RADAR_OWNER_EMAIL`.
+Use the in-app **Connections** panel. It stores provider credentials through a loopback-only setup service protected by an ephemeral bearer secret and an exact-origin browser policy. Both Slack and Gmail collectors call a profile endpoint first and stop before reading content when the returned email does not equal the configured owner email.
 
-For Slack, use a reviewed read-only user token with access to the intended conversations. The collector needs identity/user lookup and the corresponding read/history scopes for public channels, private channels, DMs, and group DMs (`users:read`, `users:read.email`, `channels:read`, `channels:history`, `groups:read`, `groups:history`, `im:read`, `im:history`, `mpim:read`, and `mpim:history`). It paginates every accessible channel, history page, and thread by default, with no lookback or count cap, and divides storage into bounded records. Optional positive `SLACK_LOOKBACK_DAYS`, `SLACK_MAX_CHANNELS`, or `SLACK_MAX_THREADS` values are diagnostic limits and make the recorded coverage partial. Run:
+For Slack, OAuth remains the intended user experience, but Slack requires one registered app and an HTTPS redirect URI. The Connections panel stores that app configuration and has a clearly marked advanced token fallback; it does not pretend the fallback is OAuth. The collector needs identity/user lookup and the corresponding read/history scopes for public channels, private channels, DMs, and group DMs (`users:read`, `users:read.email`, `channels:read`, `channels:history`, `groups:read`, `groups:history`, `im:read`, `im:history`, `mpim:read`, and `mpim:history`). It paginates every accessible channel, history page, and thread by default, with no lookback or count cap, and divides storage into bounded records.
 
 ```powershell
 npm run collect:slack
 ```
 
-For Gmail, create OAuth credentials with `https://www.googleapis.com/auth/gmail.readonly`, store the refresh token only as a secret, and set `INTERCOM_GMAIL_QUERY` for the notification pattern used by the verified mailbox. By default, `GMAIL_QUERY` covers the complete mailbox except spam and trash, thread-list pages are exhausted, referenced text bodies are fetched, and long threads are divided into bounded records. Set a positive `GMAIL_MAX_THREADS` only for diagnostics; doing so marks coverage partial. Run:
+For Gmail, register a Google OAuth client with `https://www.googleapis.com/auth/gmail.readonly`. The Connections panel stores the client secret and resulting refresh token with Windows DPAPI and keeps Intercom as a Gmail query rather than a duplicate mailbox integration. By default, the mailbox query covers everything except spam and trash, thread-list pages are exhausted, referenced text bodies are fetched, and long threads are divided into bounded records.
 
 ```powershell
 npm run collect:gmail
@@ -108,7 +108,7 @@ npm run sync:watch
 
 `RADAR_SYNC_INTERVAL_MINUTES` defaults to 15 and is bounded between 1 minute and 24 hours. `RADAR_SYNC_SOURCES` can optionally restrict a cycle to `slack`, `gmail`, `discord`, or `obsidian`. Unconfigured sources are skipped with missing setting names only; one failed source does not prevent the others from completing, and secret values are never included in the scheduler result.
 
-For Discord, Radar reuses the existing read-only archive. Set `DISCORD_MCP_URL`, its dedicated read-only API key, the exact `DISCORD_OWNER_USER_ID`, and a narrow `DISCORD_OWNER_QUERY` used to verify that identity before any channels are read. The collector searches the complete archive by default and adaptively splits busy time ranges so a 100-message API limit does not silently truncate history. Positive `DISCORD_LOOKBACK_DAYS` or `DISCORD_MAX_SEARCH_REQUESTS` values are optional diagnostic limits:
+For Discord, Radar reuses the existing read-only archive at `https://discord-knowledge-mvp-production.up.railway.app/mcp`. Enter any required dedicated API key, the exact owner user ID, and a narrow owner query in Connections. The collector verifies that identity before channels are read, searches the complete archive by default, and adaptively splits busy time ranges so a 100-message API limit does not silently truncate history.
 
 ```powershell
 npm run collect:discord
@@ -120,7 +120,9 @@ The current archive does not expose deletion tombstones, so Discord syncs are ex
 
 Radar includes a local-only sidecar that binds to `127.0.0.1`, accepts only the draft route, and sends stateless requests to the fixed OpenAI Responses API endpoint. Its launcher creates a Node permission-restricted child that receives only sidecar/OpenAI settings—not Slack, Gmail, Discord, Obsidian, or Radar credentials—and denies general filesystem reads, filesystem writes, child processes, workers, and native addons. It provides no model tools, storage, source credentials, or message-sending path.
 
-Set `OPENAI_API_KEY`, generate one strong local shared secret, and place the same value in `SIDECAR_SHARED_SECRET` and `TEXT_GENERATOR_API_KEY`. Keep `TEXT_GENERATOR_URL=http://127.0.0.1:8789/draft`, then start the isolated process separately:
+Enter an OpenAI API key and model in Connections; Radar generates and stores its own local sidecar secret. A ChatGPT subscription can authenticate ChatGPT and Codex, but it does not pay for ordinary OpenAI API requests. Radar does not copy or repurpose ChatGPT/Codex session tokens. This separation keeps the generator text-only and avoids granting a coding agent access to private messages.
+
+After restarting Radar, the supervisor starts the isolated process automatically when generation is fully configured. It can also be started separately for diagnostics:
 
 ```powershell
 npm run sidecar:text

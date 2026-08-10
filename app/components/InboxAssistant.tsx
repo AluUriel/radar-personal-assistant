@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { demoItems, type InboxItem, type Priority, type Source } from "../data/demo";
+import { ConnectionsPanel } from "./ConnectionsPanel";
 
 const sources: Array<Source | "All"> = ["All", "Slack", "Email", "Discord"];
 const priorities: Priority[] = ["Now", "Today", "Waiting"];
@@ -31,15 +32,6 @@ interface SourceSyncStatus {
   coverageComplete: boolean;
   coverageDetail: string;
   completedAt: string;
-}
-
-interface IntegrationReadiness {
-  id: "core" | "slack" | "gmail" | "intercom" | "discord" | "obsidian" | "generator";
-  label: string;
-  state: "configured" | "needs-configuration";
-  missing: string[];
-  issues: string[];
-  detail: string;
 }
 
 interface GeneratorRuntime {
@@ -142,7 +134,6 @@ export function InboxAssistant() {
   const [generating, setGenerating] = useState(false);
   const [generationMessage, setGenerationMessage] = useState("");
   const [sourceStatuses, setSourceStatuses] = useState<SourceSyncStatus[]>([]);
-  const [integrations, setIntegrations] = useState<IntegrationReadiness[]>([]);
   const [showSetup, setShowSetup] = useState(false);
   const [draftEdits, setDraftEdits] = useState<Record<string, string>>({});
   const [generatorRuntime, setGeneratorRuntime] = useState<GeneratorRuntime>({ available: false, restricted: false });
@@ -173,8 +164,7 @@ export function InboxAssistant() {
       try {
         const readinessResponse = await fetch("/api/readiness", { cache: "no-store" });
         if (readinessResponse.ok) {
-          const readinessPayload = await readinessResponse.json() as { integrations?: IntegrationReadiness[]; generatorRuntime?: GeneratorRuntime };
-          setIntegrations(readinessPayload.integrations ?? []);
+          const readinessPayload = await readinessResponse.json() as { generatorRuntime?: GeneratorRuntime };
           setGeneratorRuntime(readinessPayload.generatorRuntime ?? { available: false, restricted: false });
         }
       } catch {
@@ -277,28 +267,7 @@ export function InboxAssistant() {
         </div>
       </header>
 
-      {showSetup && (
-        <section className="setup-panel" aria-label="Connection readiness">
-          <div className="setup-intro">
-            <div><p className="eyebrow">PRIVATE SETUP</p><h2>Connection readiness</h2></div>
-            <p>Only setting names and validation results are shown. Secret values never reach the browser.</p>
-          </div>
-          <div className="setup-grid">
-            {integrations.map((integration) => {
-              const configured = integration.state === "configured";
-              return (
-                <article key={integration.id} className={`setup-item setup-item-${configured ? "configured" : "missing"}`}>
-                  <div><strong>{integration.label}</strong><span>{configured ? "Configured" : "Action required"}</span></div>
-                  <p>{integration.detail}</p>
-                  {!configured && <small>{[...integration.missing, ...integration.issues].join(" · ")}</small>}
-                </article>
-              );
-            })}
-            {!integrations.length && <p className="setup-loading">Reading local configuration…</p>}
-          </div>
-          <p className="setup-note">A configured source is not marked complete until its collector verifies the owner identity and records scan coverage.</p>
-        </section>
-      )}
+      {showSetup && <ConnectionsPanel />}
 
       <section className="toolbar" aria-label="Inbox filters">
         <div className="source-tabs">

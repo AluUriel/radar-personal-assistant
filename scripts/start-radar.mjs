@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import crypto from "node:crypto";
 import path from "node:path";
 import process from "node:process";
 import { loadLocalSettingsEnvironment } from "./lib/local-settings.mjs";
@@ -15,6 +16,9 @@ import {
 } from "./lib/radar-supervisor.mjs";
 
 const environment = loadLocalSettingsEnvironment(process.env);
+environment.RADAR_SETUP_PORT ||= "8790";
+environment.RADAR_SETUP_URL ||= `http://127.0.0.1:${environment.RADAR_SETUP_PORT}`;
+environment.RADAR_SETUP_SECRET ||= crypto.randomBytes(32).toString("base64url");
 const runtime = localRadarRuntime(environment);
 const generator = generatorLaunchPlan(environment);
 const watcher = sourceWatcherLaunchPlan(environment);
@@ -63,6 +67,13 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 }
 
 try {
+  const setup = launch("local-setup", process.execPath, [path.resolve("scripts/local-setup-broker.mjs")]);
+  await Promise.race([
+    waitForRadar(`${environment.RADAR_SETUP_URL}/health`, {
+      headers: { authorization: `Bearer ${environment.RADAR_SETUP_SECRET}` },
+    }),
+    new Promise((_, reject) => setup.once("exit", (code, signal) => reject(new Error(`Local setup process exited during startup with ${signal ?? code}`)))),
+  ]);
   if (await radarIsReady(runtime.origin)) {
     log("radar-component-reused", { component: "web", url: runtime.origin });
   } else {

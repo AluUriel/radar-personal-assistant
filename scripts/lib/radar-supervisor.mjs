@@ -75,12 +75,14 @@ export async function radarIsReady(origin, fetchImpl = fetch) {
   }
 }
 
-export async function waitForRadar(origin, { fetchImpl = fetch, timeoutMs = 30_000, intervalMs = 250 } = {}) {
+export async function waitForRadar(origin, { fetchImpl = fetch, timeoutMs = 30_000, intervalMs = 250, headers = { accept: "application/json" } } = {}) {
   const deadline = Date.now() + timeoutMs;
   let lastError;
   while (Date.now() < deadline) {
     try {
-      const response = await fetchImpl(`${origin}/api/inbox`, { headers: { accept: "application/json" }, redirect: "error" });
+      const target = new URL(origin);
+      if (target.pathname === "/") target.pathname = "/api/inbox";
+      const response = await fetchImpl(target, { headers, redirect: "error" });
       if (response.ok) return;
       lastError = new Error(`HTTP ${response.status}`);
     } catch (error) {

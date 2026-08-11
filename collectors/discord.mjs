@@ -4,6 +4,7 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 import { detectRequest } from "./lib/request-detection.mjs";
 import { uploadConversationBatches } from "./lib/radar-upload.mjs";
+import { callDiscordMcpTool } from "../scripts/lib/discord-mcp-client.mjs";
 
 const SEARCH_LIMIT = 100;
 const MESSAGES_PER_RECORD = 10;
@@ -12,47 +13,22 @@ function hash(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function apiRoot(mcpUrl) {
-  const url = new URL(mcpUrl);
-  if (url.protocol !== "https:" && !(url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname))) {
-    throw new Error("DISCORD_MCP_URL must use HTTPS or local HTTP");
-  }
-  url.pathname = "/";
-  url.search = "";
-  url.hash = "";
-  return url;
-}
-
-async function discordRequest(root, path, token, fetchImpl, init = {}) {
-  const response = await fetchImpl(new URL(path, root), {
-    ...init,
-    redirect: "error",
-    headers: {
-      authorization: `Bearer ${token}`,
-      accept: "application/json",
-      ...(init.body ? { "content-type": "application/json" } : {}),
-      ...init.headers,
-    },
-  });
-  if (!response.ok) throw new Error(`Discord archive request failed with HTTP ${response.status}`);
-  const payload = await response.json();
-  if (!payload || !Array.isArray(payload.results)) throw new Error("Discord archive returned an invalid response");
-  return payload;
-}
-
-async function searchInterval({ root, token, channelId, fromMs, toMs, fetchImpl }) {
-  return discordRequest(root, "/api/search", token, fetchImpl, {
-    method: "POST",
-    body: JSON.stringify({
+async function searchInterval({ mcpUrl, token, channelId, fromMs, toMs, fetchImpl }) {
+  return callDiscordMcpTool({
+    mcpUrl,
+    token,
+    name: "search_messages",
+    args: {
       channelIds: [channelId],
       from: new Date(fromMs).toISOString(),
       to: new Date(toMs).toISOString(),
       limit: SEARCH_LIMIT,
-    }),
+    },
+    fetchImpl,
   });
 }
 
-async function collectChannelMessages({ root, token, channelId, fromMs, toMs, fetchImpl, budget, minWindowMs }) {
+async function collectChannelMessages({ mcpUrl, token, channelId, fromMs, toMs, fetchImpl, budget, minWindowMs }) {
   const pending = [{ fromMs, toMs }];
   const messages = new Map();
   const problems = [];
@@ -64,7 +40,7 @@ async function collectChannelMessages({ root, token, channelId, fromMs, toMs, fe
     }
     const interval = pending.pop();
     budget.used += 1;
-    const page = await searchInterval({ root, token, channelId, ...interval, fetchImpl });
+    const page = await searchInterval({ mcpUrl, token, channelId, ...interval, fetchImpl });
     for (const message of page.results) if (message?.id) messages.set(String(message.id), message);
 
     if (page.results.length >= SEARCH_LIMIT) {
@@ -154,15 +130,11 @@ export async function collectDiscord({
   minWindowMinutes = 15,
   fetchImpl = fetch,
 }) {
-  const root = apiRoot(mcpUrl);
-  const usersUrl = new URL("/api/users", root);
-  usersUrl.searchParams.set("query", ownerQuery);
-  usersUrl.searchParams.set("limit", "100");
-  const users = await discordRequest(root, usersUrl.pathname + usersUrl.search, token, fetchImpl);
+  const users = await callDiscordMcpTool({ mcpUrl, token, name: "list_users", args: { query: ownerQuery, limit: 100 }, fetchImpl });
   const owner = users.results.find((user) => String(user.id) === ownerId && !user.is_bot);
   if (!owner) throw new Error("Discord owner identity could not be verified in the visible archive");
 
-  const channelsPayload = await discordRequest(root, "/api/channels", token, fetchImpl);
+  const channelsPayload = await callDiscordMcpTool({ mcpUrl, token, name: "list_channels", fetchImpl });
   const channels = channelsPayload.results.filter((channel) => channel?.id && !channel.is_archived);
   const fromMs = lookbackDays > 0 ? Date.now() - lookbackDays * 86_400_000 : 0;
   const toMs = Date.now();
@@ -173,7 +145,7 @@ export async function collectDiscord({
   for (const channel of channels) {
     try {
       const result = await collectChannelMessages({
-        root,
+        mcpUrl,
         token,
         channelId: String(channel.id),
         fromMs,

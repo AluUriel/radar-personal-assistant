@@ -9,6 +9,7 @@ import {
   windowsDpapiCodec,
 } from "./local-settings.mjs";
 import { createLocalOAuthManager } from "./local-oauth.mjs";
+import { callDiscordMcpTool } from "./discord-mcp-client.mjs";
 
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -136,14 +137,13 @@ async function findDiscordUsers(query, environment, codec, fetchImpl) {
   const stored = readLocalSettings({ environment, codec });
   const token = stored.secrets.DISCORD_MCP_API_KEY;
   if (!token) throw new Error("Authorize Discord before choosing your profile");
-  const root = new URL(current.values.DISCORD_MCP_URL);
-  root.pathname = "/api/users";
-  root.search = "";
-  root.searchParams.set("query", query.trim());
-  root.searchParams.set("limit", "25");
-  const response = await fetchImpl(root, { headers: { authorization: `Bearer ${token}`, accept: "application/json" }, redirect: "error" });
-  if (!response.ok) throw new Error(`Discord profile search failed with HTTP ${response.status}`);
-  const payload = await response.json();
+  const payload = await callDiscordMcpTool({
+    mcpUrl: current.values.DISCORD_MCP_URL,
+    token,
+    name: "list_users",
+    args: { query: query.trim(), limit: 25 },
+    fetchImpl,
+  });
   if (!Array.isArray(payload.results)) throw new Error("Discord profile search returned an invalid response");
   return payload.results
     .filter((user) => user?.id && !user.is_bot)

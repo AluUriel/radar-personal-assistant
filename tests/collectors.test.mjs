@@ -278,17 +278,18 @@ test("Slack stops before conversation reads when identity does not match", async
 });
 
 test("Discord verifies the owner and detects a newer mentioned request", async () => {
-  const fetchImpl = async (input) => {
-    const url = new URL(input);
-    if (url.pathname === "/api/users") return jsonResponse({
+  const fetchImpl = async (_input, init) => {
+    const request = JSON.parse(String(init.body));
+    const respond = (structuredContent) => jsonResponse({ jsonrpc: "2.0", id: request.id, result: { structuredContent } });
+    if (request.params.name === "list_users") return respond({
       count: 1,
       results: [{ id: "UOWNER", username: "alu", display_name: "Alu", is_bot: false }],
     });
-    if (url.pathname === "/api/channels") return jsonResponse({
+    if (request.params.name === "list_channels") return respond({
       count: 1,
       results: [{ id: "C1", guild_id: "G1", name: "software", is_archived: false }],
     });
-    if (url.pathname === "/api/search") return jsonResponse({
+    if (request.params.name === "search_messages") return respond({
       count: 2,
       results: [
         {
@@ -317,7 +318,7 @@ test("Discord verifies the owner and detects a newer mentioned request", async (
         },
       ],
     });
-    throw new Error(`Unexpected Discord mock request: ${url}`);
+    throw new Error(`Unexpected Discord MCP tool: ${request.params.name}`);
   };
 
   const result = await collectDiscord({
@@ -338,12 +339,12 @@ test("Discord verifies the owner and detects a newer mentioned request", async (
 });
 
 test("Discord stops before reading channels when the owner cannot be verified", async () => {
-  const fetchImpl = async (input) => {
-    const url = new URL(input);
-    if (url.pathname === "/api/users") return jsonResponse({
+  const fetchImpl = async (_input, init) => {
+    const request = JSON.parse(String(init.body));
+    if (request.params.name === "list_users") return jsonResponse({ jsonrpc: "2.0", id: request.id, result: { structuredContent: {
       count: 1,
       results: [{ id: "UOTHER", username: "someone", display_name: "Someone", is_bot: false }],
-    });
+    } } });
     throw new Error("Discord channel content should not be requested after identity mismatch");
   };
   await assert.rejects(() => collectDiscord({

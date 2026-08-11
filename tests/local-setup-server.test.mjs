@@ -17,9 +17,12 @@ test("the loopback setup service requires its bearer secret and never returns st
     secret: "broker-secret",
     codec,
     folderPicker: () => "C:\\Notes\\Vault",
-    fetchImpl: async (input) => String(input).includes("/api/users")
-      ? Response.json({ results: [{ id: "U1", username: "alu", display_name: "Alu", is_bot: false }] })
-      : Response.json({ error: "unexpected" }, { status: 500 }),
+    fetchImpl: async (_input, init) => {
+      const request = JSON.parse(String(init.body));
+      return request.params?.name === "list_users"
+        ? Response.json({ jsonrpc: "2.0", id: request.id, result: { structuredContent: { results: [{ id: "U1", username: "alu", display_name: "Alu", is_bot: false }] } } })
+        : Response.json({ error: "unexpected" }, { status: 500 });
+    },
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();

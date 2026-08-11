@@ -87,9 +87,9 @@ export function createLocalOAuthManager({
 
   async function start(provider) {
     const current = settings();
-    const ownerEmail = requireValue(current.values.RADAR_OWNER_EMAIL, "Save your owner email before connecting an account");
 
     if (provider === "google") {
+      const ownerEmail = requireValue(current.values.RADAR_OWNER_EMAIL, "Save your owner email before connecting an account");
       const clientId = requireValue(current.values.GMAIL_CLIENT_ID, "Import or enter a Google Desktop OAuth client first");
       const flow = createFlow(provider, "http://127.0.0.1:8790");
       const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
@@ -109,6 +109,7 @@ export function createLocalOAuthManager({
     }
 
     if (provider === "slack") {
+      requireValue(current.values.RADAR_OWNER_EMAIL, "Save your owner email before connecting an account");
       const clientId = requireValue(current.values.SLACK_CLIENT_ID, "Enter the PKCE-enabled Slack app client ID first");
       const flow = createFlow(provider, "http://localhost:8790/oauth/slack/callback");
       const url = new URL("https://slack.com/oauth/v2/authorize");
@@ -150,9 +151,9 @@ export function createLocalOAuthManager({
     if (url.searchParams.get("error")) throw new Error(`Authorization was not completed: ${url.searchParams.get("error")}`);
     const code = requireValue(url.searchParams.get("code"), "The authorization provider did not return a code");
     const current = settings();
-    const expectedEmail = requireValue(current.values.RADAR_OWNER_EMAIL, "Owner email is not configured");
 
     if (flow.provider === "google") {
+      const expectedEmail = requireValue(current.values.RADAR_OWNER_EMAIL, "Owner email is not configured");
       const form = new URLSearchParams({
         client_id: current.values.GMAIL_CLIENT_ID,
         code,
@@ -177,6 +178,7 @@ export function createLocalOAuthManager({
     }
 
     if (flow.provider === "slack") {
+      const expectedEmail = requireValue(current.values.RADAR_OWNER_EMAIL, "Owner email is not configured");
       const token = await jsonRequest("https://slack.com/api/oauth.v2.access", {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },

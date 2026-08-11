@@ -167,6 +167,10 @@ export function ConnectionsPanel() {
     valueNames: string[],
     secretNames: string[] = [],
   ) {
+    if (provider !== "discord" && !values.RADAR_OWNER_EMAIL.trim()) {
+      setMessage(`Save your owner email before authorizing ${label}.`);
+      return;
+    }
     const popup = window.open("", `radar-${provider}-oauth`, "popup,width=560,height=720");
     if (!popup) {
       setMessage(`Allow popups for Radar, then click Authorize ${label} again.`);
@@ -200,8 +204,14 @@ export function ConnectionsPanel() {
       }
       if (!popup.closed) popup.close();
     } catch (error) {
-      popup.close();
-      setMessage(error instanceof Error ? error.message : `${label} authorization failed.`);
+      const detail = error instanceof Error ? error.message : `${label} authorization failed.`;
+      try {
+        popup.document.title = `${label} authorization could not start`;
+        popup.document.body.textContent = `${detail} Return to Radar after correcting the setup.`;
+      } catch {
+        // The provider page may already own the popup; keep its visible error available.
+      }
+      setMessage(detail);
     } finally {
       setBusy("");
     }

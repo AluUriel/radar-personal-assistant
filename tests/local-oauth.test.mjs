@@ -79,6 +79,7 @@ test("Slack authorization requests read-only user scopes and verifies the exact 
 
 test("Discord dynamically registers the local client and stores OAuth tokens", async () => {
   const { directory, environment } = fixture();
+  updateLocalSettings({ values: { RADAR_OWNER_EMAIL: "" } }, { environment, codec });
   let registrations = 0;
   const fetchImpl = async (input) => {
     const url = String(input);
@@ -101,6 +102,18 @@ test("Discord dynamically registers the local client and stores OAuth tokens", a
     assert.equal(stored.values.DISCORD_OAUTH_CLIENT_ID, "discord-client");
     assert.equal(stored.secrets.DISCORD_MCP_API_KEY, "discord-access");
     assert.equal(stored.secrets.DISCORD_REFRESH_TOKEN, "discord-refresh");
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("Google and Slack still require an owner email before authorization", async () => {
+  const { directory, environment } = fixture();
+  updateLocalSettings({ values: { RADAR_OWNER_EMAIL: "" } }, { environment, codec });
+  try {
+    const oauth = createLocalOAuthManager({ environment, codec });
+    await assert.rejects(oauth.start("google"), /Save your owner email/);
+    await assert.rejects(oauth.start("slack"), /Save your owner email/);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

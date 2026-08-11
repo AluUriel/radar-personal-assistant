@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import http from "node:http";
 import path from "node:path";
 import {
+  readLocalSettings,
   redactedLocalSettings,
   updateLocalSettings,
   windowsDpapiCodec,
@@ -128,6 +129,27 @@ export function pickWindowsFolder() {
   }).trim();
 }
 
+async function findDiscordUsers(query, environment, codec, fetchImpl) {
+  if (typeof query !== "string" || !query.trim() || query.trim().length > 100) throw new Error("Enter a Discord name to search");
+  const current = redactedLocalSettings(environment, { codec });
+  const stored = readLocalSettings({ environment, codec });
+  const token = stored.secrets.DISCORD_MCP_API_KEY;
+  if (!token) throw new Error("Authorize Discord before choosing your profile");
+  const root = new URL(current.values.DISCORD_MCP_URL);
+  root.pathname = "/api/users";
+  root.search = "";
+  root.searchParams.set("query", query.trim());
+  root.searchParams.set("limit", "25");
+  const response = await fetchImpl(root, { headers: { authorization: `Bearer ${token}`, accept: "application/json" }, redirect: "error" });
+  if (!response.ok) throw new Error(`Discord profile search failed with HTTP ${response.status}`);
+  const payload = await response.json();
+  if (!Array.isArray(payload.results)) throw new Error("Discord profile search returned an invalid response");
+  return payload.results
+    .filter((user) => user?.id && !user.is_bot)
+    .slice(0, 25)
+    .map((user) => ({ id: String(user.id), username: String(user.username || ""), displayName: String(user.display_name || user.username || user.id) }));
+}
+
 export function createLocalSetupServer({
   environment = process.env,
   secret = environment.RADAR_SETUP_SECRET,
@@ -196,6 +218,15 @@ export function createLocalSetupServer({
         }
         const selected = folderPicker();
         send(response, 200, { selected: selected || null });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/discord/users") {
+        if (!request.headers["content-type"]?.startsWith("application/json")) {
+          send(response, 415, { error: "json-required" });
+          return;
+        }
+        const body = await readJson(request);
+        send(response, 200, { users: await findDiscordUsers(body.query, environment, codec, fetchImpl) });
         return;
       }
       const oauthStart = url.pathname.match(/^\/oauth\/(google|slack|discord)\/start$/);

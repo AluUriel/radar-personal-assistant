@@ -17,6 +17,9 @@ test("the loopback setup service requires its bearer secret and never returns st
     secret: "broker-secret",
     codec,
     folderPicker: () => "C:\\Notes\\Vault",
+    fetchImpl: async (input) => String(input).includes("/api/users")
+      ? Response.json({ results: [{ id: "U1", username: "alu", display_name: "Alu", is_bot: false }] })
+      : Response.json({ error: "unexpected" }, { status: 500 }),
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
@@ -34,7 +37,7 @@ test("the loopback setup service requires its bearer secret and never returns st
       headers,
       body: JSON.stringify({
         values: { RADAR_OWNER_EMAIL: "owner@example.com", GMAIL_CLIENT_ID: "google-client" },
-        secrets: { OPENAI_API_KEY: "private-key" },
+        secrets: { OPENAI_API_KEY: "private-key", DISCORD_MCP_API_KEY: "discord-token" },
       }),
     });
     const payload = await saved.json();
@@ -47,6 +50,9 @@ test("the loopback setup service requires its bearer secret and never returns st
     const oauthPayload = await oauthStart.json();
     assert.equal(oauthStart.status, 200);
     assert.match(oauthPayload.authorizationUrl, /^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth/);
+
+    const discordUsers = await fetch(`${origin}/discord/users`, { method: "POST", headers, body: JSON.stringify({ query: "alu" }) });
+    assert.deepEqual(await discordUsers.json(), { users: [{ id: "U1", username: "alu", displayName: "Alu" }] });
 
     const folder = await fetch(`${origin}/folders/obsidian`, { method: "POST", headers, body: "{}" });
     assert.deepEqual(await folder.json(), { selected: "C:\\Notes\\Vault" });

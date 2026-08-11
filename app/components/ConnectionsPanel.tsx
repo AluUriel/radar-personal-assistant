@@ -17,6 +17,12 @@ interface ConnectionStatus {
   restartRequired?: boolean;
 }
 
+interface DiscordUser {
+  id: string;
+  username: string;
+  displayName: string;
+}
+
 type Values = Record<string, string>;
 
 const EMPTY_VALUES: Values = {
@@ -53,12 +59,22 @@ async function oauthStart(provider: "google" | "slack" | "discord") {
   });
 }
 
+async function searchDiscordProfiles(query: string) {
+  return fetch("http://127.0.0.1:8790/discord/users", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ query }),
+    cache: "no-store",
+  });
+}
+
 export function ConnectionsPanel() {
   const [status, setStatus] = useState<ConnectionStatus | null>(null);
   const [values, setValues] = useState<Values>(EMPTY_VALUES);
   const [secrets, setSecrets] = useState<Values>({});
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
+  const [discordUsers, setDiscordUsers] = useState<DiscordUser[]>([]);
 
   const applyStatus = useCallback((next: ConnectionStatus) => {
     setStatus(next);
@@ -178,6 +194,7 @@ export function ConnectionsPanel() {
         applyStatus(current);
         if (providerConnected(provider, current) && connectionMarker(provider, current) !== previousMarker) {
           setMessage(`${label} is authorized. No messages were read.`);
+          if (provider === "discord") await discoverDiscordOwner();
           break;
         }
       }
@@ -187,6 +204,41 @@ export function ConnectionsPanel() {
       setMessage(error instanceof Error ? error.message : `${label} authorization failed.`);
     } finally {
       setBusy("");
+    }
+  }
+
+  async function saveDiscordOwner(user: DiscordUser, query: string) {
+    const response = await localSetupFetch("", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ values: { DISCORD_OWNER_USER_ID: user.id, DISCORD_OWNER_QUERY: query }, secrets: {} }),
+    });
+    const payload = await response.json() as ConnectionStatus & { error?: string };
+    if (!response.ok) throw new Error(payload.error ?? "Discord profile could not be saved.");
+    applyStatus(payload);
+    setDiscordUsers([]);
+    setMessage(`Discord is connected as ${user.displayName}. No messages were read.`);
+  }
+
+  async function discoverDiscordOwner() {
+    const query = values.DISCORD_OWNER_QUERY.trim() || values.RADAR_OWNER_EMAIL.split("@")[0]?.trim();
+    if (!query) {
+      setMessage("Discord is authorized. Enter your Discord name to finish profile verification.");
+      return;
+    }
+    try {
+      const response = await searchDiscordProfiles(query);
+      const payload = await response.json() as { users?: DiscordUser[]; error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Discord profile search failed.");
+      const users = payload.users ?? [];
+      if (users.length === 1) {
+        await saveDiscordOwner(users[0], query);
+        return;
+      }
+      setDiscordUsers(users);
+      setMessage(users.length ? "Choose your Discord profile below." : "No matching Discord profile was found. Try your Discord username.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Discord profile search failed.");
     }
   }
 
@@ -284,9 +336,13 @@ export function ConnectionsPanel() {
         <form className="connection-card" onSubmit={(event) => { event.preventDefault(); void authorize("discord", "Discord", ["DISCORD_MCP_URL", "DISCORD_OWNER_USER_ID", "DISCORD_OWNER_QUERY"]); }}>
           <div className="connection-title"><div><b>D</b><h3>Discord MCP</h3></div><StateBadge state={status?.sources.discord.state ?? "needs-configuration"} /></div>
           <p>{status?.sources.discord.apiKeyStored ? "OAuth access is connected. Owner details are still checked before archive retrieval." : "The supplied server supports automatic OAuth registration—no app key or token is required."}</p>
-          <details><summary>Owner verification</summary>
+          <details open={Boolean(status?.sources.discord.apiKeyStored && !status?.sources.discord.ownerUserId)}><summary>Discord profile</summary>
             {field("DISCORD_MCP_URL", "MCP endpoint")}
-            <div className="connection-row">{field("DISCORD_OWNER_USER_ID", "Your Discord user ID")}{field("DISCORD_OWNER_QUERY", "Owner verification query")}</div>
+            {field("DISCORD_OWNER_QUERY", "Your Discord name", { placeholder: "Radar can usually find this automatically" })}
+            {status?.sources.discord.apiKeyStored && <button type="button" className="secondary-connection-button" onClick={() => void discoverDiscordOwner()} disabled={Boolean(busy)}>Find my profile</button>}
+            {discordUsers.length > 0 && <div className="discord-user-list">
+              {discordUsers.map((user) => <button type="button" key={user.id} onClick={() => void saveDiscordOwner(user, values.DISCORD_OWNER_QUERY.trim() || user.username)}><strong>{user.displayName}</strong><span>@{user.username}</span></button>)}
+            </div>}
           </details>
           <button className="oauth-button" disabled={Boolean(busy)}>
             {busy === "Authorize Discord" ? "Waiting for Discord…" : status?.sources.discord.apiKeyStored ? "Reauthorize Discord" : "Authorize Discord"}

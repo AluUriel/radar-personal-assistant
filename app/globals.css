@@ -64,6 +64,10 @@ h1 { margin: 0; font-size: 20px; letter-spacing: -.03em; }
 .client-file input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .connection-card > button, .folder-field > button { min-height: 33px; margin-top: 12px; padding: 0 11px; color: #1e2c24; background: #dfe8df; border: 0; border-radius: 7px; cursor: pointer; font-size: 10px; font-weight: 750; }
 .connection-card > button.oauth-button { width: 100%; color: white; background: #517660; }
+.connection-card .secondary-connection-button { width: 100%; min-height: 31px; margin-top: 8px; color: #dce5df; background: transparent; border: 1px solid rgba(255,255,255,.18); border-radius: 7px; cursor: pointer; font-size: 9px; font-weight: 700; }
+.discord-user-list { margin-top: 8px; display: grid; gap: 5px; }
+.discord-user-list button { padding: 8px 9px; display: flex; justify-content: space-between; color: #dce5df; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); border-radius: 7px; cursor: pointer; font-size: 9px; }
+.discord-user-list button span { color: #9eaaa3; }
 .connection-card button:disabled { cursor: wait; opacity: .55; }
 .folder-field { display: grid; grid-template-columns: 1fr auto; gap: 7px; align-items: end; }
 .folder-field > button { white-space: nowrap; }

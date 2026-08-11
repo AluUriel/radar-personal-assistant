@@ -76,6 +76,7 @@ export function buildConnectionStatus(environment = process.env, options = {}) {
         oauthClientReady: Boolean(value("SLACK_CLIENT_ID")),
         clientId: value("SLACK_CLIENT_ID"),
         connectedEmail: value("SLACK_CONNECTED_EMAIL"),
+        connectedAt: value("SLACK_CONNECTED_AT"),
         accessTokenStored: secret("SLACK_ACCESS_TOKEN"),
       },
       gmail: {
@@ -83,6 +84,7 @@ export function buildConnectionStatus(environment = process.env, options = {}) {
         oauthClientReady: Boolean(value("GMAIL_CLIENT_ID")),
         clientId: value("GMAIL_CLIENT_ID"),
         connectedEmail: value("GMAIL_CONNECTED_EMAIL"),
+        connectedAt: value("GMAIL_CONNECTED_AT"),
         refreshTokenStored: secret("GMAIL_REFRESH_TOKEN"),
         query: value("GMAIL_QUERY"),
         intercomQuery: value("INTERCOM_GMAIL_QUERY"),
@@ -94,6 +96,7 @@ export function buildConnectionStatus(environment = process.env, options = {}) {
         url: value("DISCORD_MCP_URL"),
         apiKeyStored: secret("DISCORD_MCP_API_KEY"),
         oauthClientRegistered: Boolean(value("DISCORD_OAUTH_CLIENT_ID")),
+        connectedAt: value("DISCORD_CONNECTED_AT"),
         ownerUserId: value("DISCORD_OWNER_USER_ID"),
         ownerQuery: value("DISCORD_OWNER_QUERY"),
       },

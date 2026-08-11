@@ -33,7 +33,7 @@ test("the loopback setup service requires its bearer secret and never returns st
       method: "PATCH",
       headers,
       body: JSON.stringify({
-        values: { RADAR_OWNER_EMAIL: "owner@example.com" },
+        values: { RADAR_OWNER_EMAIL: "owner@example.com", GMAIL_CLIENT_ID: "google-client" },
         secrets: { OPENAI_API_KEY: "private-key" },
       }),
     });
@@ -42,6 +42,11 @@ test("the loopback setup service requires its bearer secret and never returns st
     assert.equal(payload.owner.email, "owner@example.com");
     assert.equal(payload.generator.apiKeyStored, true);
     assert.doesNotMatch(JSON.stringify(payload), /private-key/);
+
+    const oauthStart = await fetch(`${origin}/oauth/google/start`, { method: "POST", headers, body: "{}" });
+    const oauthPayload = await oauthStart.json();
+    assert.equal(oauthStart.status, 200);
+    assert.match(oauthPayload.authorizationUrl, /^https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth/);
 
     const folder = await fetch(`${origin}/folders/obsidian`, { method: "POST", headers, body: "{}" });
     assert.deepEqual(await folder.json(), { selected: "C:\\Notes\\Vault" });

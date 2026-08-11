@@ -6,6 +6,8 @@ The normal setup path does not use a populated `.env.local`. `radar:start` loads
 
 The local setup service also owns native operating-system actions such as the Obsidian folder picker. The Cloudflare-style web runtime never receives filesystem permission or direct DPAPI access. Saved settings take effect after a Radar restart, and saving configuration never starts source ingestion by itself.
 
+Provider authorization uses the system browser and loopback callbacks. Every attempt has a random, single-use state value with a ten-minute lifetime and a PKCE verifier kept only in broker memory. Gmail and Slack access is saved only after the provider profile exactly matches the configured owner email. Discord uses its MCP server's OAuth discovery and dynamic client registration, then retains the existing content-level owner verification. Rotating Slack and Discord tokens are refreshed and re-encrypted before a collector starts.
+
 Radar is a single-user, read-first assistant for requests arriving through Slack, Gmail/Intercom, and Discord. The UI is intentionally separate from source credentials and from the text generator.
 
 ## Data flow

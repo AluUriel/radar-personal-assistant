@@ -69,8 +69,8 @@ export function buildIntegrationReadiness(environment: Environment): Integration
   return [
     evaluate(environment, "core", "Radar core", coreRequired, "Private owner access and authenticated ingestion.", urlIssue(environment, "RADAR_URL")),
     evaluate(environment, "slack", "Slack", [...coreRequired, "SLACK_ACCESS_TOKEN"], "Read-only workspace collection; identity is verified before messages are read."),
-    evaluate(environment, "gmail", "Gmail", [...coreRequired, "GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN"], "Read-only mailbox collection; identity is verified before threads are read."),
-    evaluate(environment, "intercom", "Intercom email", [...coreRequired, "GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN", "INTERCOM_GMAIL_QUERY"], "Intercom notifications are selected inside the verified Gmail mailbox."),
+    evaluate(environment, "gmail", "Gmail", [...coreRequired, "GMAIL_CLIENT_ID", "GMAIL_REFRESH_TOKEN"], "Read-only mailbox collection; identity is verified before threads are read."),
+    evaluate(environment, "intercom", "Intercom email", [...coreRequired, "GMAIL_CLIENT_ID", "GMAIL_REFRESH_TOKEN", "INTERCOM_GMAIL_QUERY"], "Intercom notifications are selected inside the verified Gmail mailbox."),
     evaluate(environment, "discord", "Discord", [...coreRequired, "DISCORD_MCP_URL", "DISCORD_MCP_API_KEY", "DISCORD_OWNER_USER_ID", "DISCORD_OWNER_QUERY"], "Read-only archive collection with an exact owner identity check.", urlIssue(environment, "DISCORD_MCP_URL")),
     evaluate(environment, "obsidian", "Obsidian", [...coreRequired, "OBSIDIAN_VAULT_PATH", "OBSIDIAN_SCOPE_PATH"], "Read-only knowledge indexing outside the vault with an explicitly approved path manifest."),
     evaluate(environment, "generator", "Isolated generator", ["TEXT_GENERATOR_URL", "TEXT_GENERATOR_API_KEY", "SIDECAR_SHARED_SECRET", "OPENAI_API_KEY", "OPENAI_MODEL"], "Local text-only process with no tools, writes, or source credentials.", generatorIssues),

@@ -8,9 +8,9 @@ interface ConnectionStatus {
   storage: { protectedBy: string; location: string };
   owner: { email: string };
   sources: {
-    slack: { state: SourceState; oauthClientReady: boolean; clientId: string; accessTokenStored: boolean };
-    gmail: { state: SourceState; oauthClientReady: boolean; clientId: string; refreshTokenStored: boolean; query: string; intercomQuery: string };
-    discord: { state: SourceState; url: string; apiKeyStored: boolean; ownerUserId: string; ownerQuery: string };
+    slack: { state: SourceState; oauthClientReady: boolean; clientId: string; connectedEmail: string; connectedAt: string; accessTokenStored: boolean };
+    gmail: { state: SourceState; oauthClientReady: boolean; clientId: string; connectedEmail: string; connectedAt: string; refreshTokenStored: boolean; query: string; intercomQuery: string };
+    discord: { state: SourceState; url: string; apiKeyStored: boolean; oauthClientRegistered: boolean; connectedAt: string; ownerUserId: string; ownerQuery: string };
     obsidian: { state: SourceState; vaultPath: string; scopePath: string };
   };
   generator: { state: SourceState; apiKeyStored: boolean; model: string; authentication: string };
@@ -42,6 +42,15 @@ async function localSetupFetch(pathname: "" | "/folder", init: RequestInit = {})
   if (sameOrigin.status !== 503) return sameOrigin;
   const directPath = pathname === "/folder" ? "/folders/obsidian" : "/connections";
   return fetch(`http://127.0.0.1:8790${directPath}`, { ...init, cache: "no-store" });
+}
+
+async function oauthStart(provider: "google" | "slack" | "discord") {
+  return fetch(`http://127.0.0.1:8790/oauth/${provider}/start`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+    cache: "no-store",
+  });
 }
 
 export function ConnectionsPanel() {
@@ -94,6 +103,10 @@ export function ConnectionsPanel() {
 
   async function save(section: string, valueNames: string[], secretNames: string[], event: FormEvent) {
     event.preventDefault();
+    await persist(section, valueNames, secretNames, true);
+  }
+
+  async function persist(section: string, valueNames: string[], secretNames: string[], announce: boolean) {
     setBusy(section);
     setMessage("");
     const selectedSecrets = Object.fromEntries(secretNames.filter((name) => secrets[name]?.trim()).map((name) => [name, secrets[name]]));
@@ -110,11 +123,84 @@ export function ConnectionsPanel() {
       if (!response.ok) throw new Error(payload.error ?? "Could not save these settings.");
       applyStatus(payload);
       setSecrets((current) => ({ ...current, ...Object.fromEntries(secretNames.map((name) => [name, ""])) }));
-      setMessage(`${section} settings were encrypted and saved. Restart Radar once after finishing all connections.`);
+      if (announce) setMessage(`${section} settings were encrypted and saved.`);
+      return payload;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not save these settings.");
     } finally {
       setBusy("");
+    }
+  }
+
+  function providerConnected(provider: "google" | "slack" | "discord", current: ConnectionStatus) {
+    if (provider === "google") return current.sources.gmail.refreshTokenStored;
+    if (provider === "slack") return current.sources.slack.accessTokenStored;
+    return current.sources.discord.apiKeyStored;
+  }
+
+  function connectionMarker(provider: "google" | "slack" | "discord", current?: ConnectionStatus | null) {
+    if (!current) return "";
+    if (provider === "google") return current.sources.gmail.connectedAt;
+    if (provider === "slack") return current.sources.slack.connectedAt;
+    return current.sources.discord.connectedAt;
+  }
+
+  async function authorize(
+    provider: "google" | "slack" | "discord",
+    label: string,
+    valueNames: string[],
+    secretNames: string[] = [],
+  ) {
+    const popup = window.open("", `radar-${provider}-oauth`, "popup,width=560,height=720");
+    if (!popup) {
+      setMessage(`Allow popups for Radar, then click Authorize ${label} again.`);
+      return;
+    }
+    const previousMarker = connectionMarker(provider, status);
+    popup.document.write("<!doctype html><title>Preparing authorization</title><body style='font:16px system-ui;padding:40px'>Preparing secure authorization…</body>");
+    setBusy(`Authorize ${label}`);
+    setMessage(`Preparing ${label} authorization…`);
+    try {
+      const saved = await persist(label, valueNames, secretNames, false);
+      if (!saved) throw new Error(`Save the required ${label} setup first.`);
+      setBusy(`Authorize ${label}`);
+      const response = await oauthStart(provider);
+      const payload = await response.json() as { authorizationUrl?: string; error?: string };
+      if (!response.ok || !payload.authorizationUrl) throw new Error(payload.error ?? `${label} authorization could not start.`);
+      popup.location.href = payload.authorizationUrl;
+      setMessage(`Complete the ${label} approval in the popup. Radar will finish automatically.`);
+      const deadline = Date.now() + 10 * 60_000;
+      while (!popup.closed && Date.now() < deadline) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1_000));
+        const statusResponse = await localSetupFetch("");
+        if (!statusResponse.ok) continue;
+        const current = await statusResponse.json() as ConnectionStatus;
+        applyStatus(current);
+        if (providerConnected(provider, current) && connectionMarker(provider, current) !== previousMarker) {
+          setMessage(`${label} is authorized. No messages were read.`);
+          break;
+        }
+      }
+      if (!popup.closed) popup.close();
+    } catch (error) {
+      popup.close();
+      setMessage(error instanceof Error ? error.message : `${label} authorization failed.`);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function importGoogleClient(file?: File) {
+    if (!file) return;
+    try {
+      const document = JSON.parse(await file.text()) as { installed?: { client_id?: string; client_secret?: string } };
+      const client = document.installed;
+      if (!client?.client_id) throw new Error("Choose a Google Desktop OAuth client JSON file.");
+      setValue("GMAIL_CLIENT_ID", client.client_id);
+      if (client.client_secret) setSecret("GMAIL_CLIENT_SECRET", client.client_secret);
+      setMessage("Google OAuth client loaded. Click Authorize Gmail to continue.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The Google OAuth client file could not be read.");
     }
   }
 
@@ -168,32 +254,43 @@ export function ConnectionsPanel() {
           <button disabled={Boolean(busy)}>{busy === "Identity" ? "Saving..." : "Save identity"}</button>
         </form>
 
-        <form className="connection-card" onSubmit={(event) => void save("Slack", ["SLACK_CLIENT_ID"], ["SLACK_CLIENT_SECRET", "SLACK_ACCESS_TOKEN"], event)}>
+        <form className="connection-card" onSubmit={(event) => { event.preventDefault(); void authorize("slack", "Slack", ["SLACK_CLIENT_ID"]); }}>
           <div className="connection-title"><div><b>S</b><h3>Slack</h3></div><StateBadge state={status?.sources.slack.state ?? "needs-configuration"} /></div>
-          <p>OAuth is the intended flow. Slack first requires one registered app and an HTTPS callback. Radar stores the resulting user token, never your password.</p>
-          {field("SLACK_CLIENT_ID", "OAuth client ID", { placeholder: "From the registered Slack app" })}
-          {field("SLACK_CLIENT_SECRET", status?.sources.slack.oauthClientReady ? "OAuth client secret (stored)" : "OAuth client secret", { secret: true, placeholder: "Leave blank to keep the stored value" })}
-          <details><summary>Advanced temporary token fallback</summary>{field("SLACK_ACCESS_TOKEN", status?.sources.slack.accessTokenStored ? "User token (stored)" : "Read-only user token", { secret: true, placeholder: "xoxp-..." })}</details>
-          <button disabled={Boolean(busy)}>{busy === "Slack" ? "Saving..." : "Save Slack setup"}</button>
+          <p>{status?.sources.slack.connectedEmail ? `Connected as ${status.sources.slack.connectedEmail}.` : "Authorize read-only access in Slack. Radar verifies the approved account before saving the connection."}</p>
+          <details open={!status?.sources.slack.oauthClientReady}><summary>One-time Slack app setup</summary>
+            <p className="connection-help">Create an internal Slack app, enable PKCE, add <code>http://localhost:8790/oauth/slack/callback</code>, then paste only its public client ID.</p>
+            {field("SLACK_CLIENT_ID", "Slack app client ID", { placeholder: "123456789.123456789" })}
+          </details>
+          <button className="oauth-button" disabled={Boolean(busy) || !values.SLACK_CLIENT_ID}>
+            {busy === "Authorize Slack" ? "Waiting for Slack…" : status?.sources.slack.accessTokenStored ? "Reauthorize Slack" : "Authorize Slack"}
+          </button>
         </form>
 
-        <form className="connection-card" onSubmit={(event) => void save("Gmail", ["GMAIL_CLIENT_ID", "GMAIL_QUERY", "INTERCOM_GMAIL_QUERY"], ["GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN"], event)}>
+        <form className="connection-card" onSubmit={(event) => { event.preventDefault(); void authorize("google", "Gmail", ["GMAIL_CLIENT_ID", "GMAIL_QUERY", "INTERCOM_GMAIL_QUERY"], ["GMAIL_CLIENT_SECRET"]); }}>
           <div className="connection-title"><div><b>@</b><h3>Gmail + Intercom</h3></div><StateBadge state={status?.sources.gmail.state ?? "needs-configuration"} /></div>
-          <p>A Google OAuth client is registered once. Radar then keeps the refresh token locally and reads Gmail with the read-only scope.</p>
-          {field("GMAIL_CLIENT_ID", "OAuth client ID")}
-          {field("GMAIL_CLIENT_SECRET", status?.sources.gmail.oauthClientReady ? "OAuth client secret (stored)" : "OAuth client secret", { secret: true, placeholder: "Leave blank to keep the stored value" })}
-          <details><summary>Advanced token import</summary>{field("GMAIL_REFRESH_TOKEN", status?.sources.gmail.refreshTokenStored ? "Refresh token (stored)" : "Refresh token", { secret: true })}</details>
-          <div className="connection-row">{field("GMAIL_QUERY", "Mailbox query")}{field("INTERCOM_GMAIL_QUERY", "Intercom query")}</div>
-          <button disabled={Boolean(busy)}>{busy === "Gmail" ? "Saving..." : "Save Gmail setup"}</button>
+          <p>{status?.sources.gmail.connectedEmail ? `Connected as ${status.sources.gmail.connectedEmail}.` : "Authorize Gmail read-only access. Intercom notifications remain a mailbox filter, not a second account."}</p>
+          <details open={!status?.sources.gmail.oauthClientReady}><summary>One-time Google app setup</summary>
+            <p className="connection-help">Download a Desktop OAuth client JSON from Google Cloud, then import it here. Tokens are never copied manually.</p>
+            <label className="client-file">Import Google client JSON<input type="file" accept="application/json,.json" onChange={(event) => void importGoogleClient(event.target.files?.[0])} /></label>
+            {field("GMAIL_CLIENT_ID", "Google client ID")}
+            {field("GMAIL_CLIENT_SECRET", "Google client secret (optional)", { secret: true, placeholder: "Loaded from the JSON file" })}
+          </details>
+          <details><summary>Mailbox filters</summary><div className="connection-row">{field("GMAIL_QUERY", "Mailbox query")}{field("INTERCOM_GMAIL_QUERY", "Intercom query")}</div></details>
+          <button className="oauth-button" disabled={Boolean(busy) || !values.GMAIL_CLIENT_ID}>
+            {busy === "Authorize Gmail" ? "Waiting for Google…" : status?.sources.gmail.refreshTokenStored ? "Reauthorize Gmail" : "Authorize Gmail"}
+          </button>
         </form>
 
-        <form className="connection-card" onSubmit={(event) => void save("Discord", ["DISCORD_MCP_URL", "DISCORD_OWNER_USER_ID", "DISCORD_OWNER_QUERY"], ["DISCORD_MCP_API_KEY"], event)}>
+        <form className="connection-card" onSubmit={(event) => { event.preventDefault(); void authorize("discord", "Discord", ["DISCORD_MCP_URL", "DISCORD_OWNER_USER_ID", "DISCORD_OWNER_QUERY"]); }}>
           <div className="connection-title"><div><b>D</b><h3>Discord MCP</h3></div><StateBadge state={status?.sources.discord.state ?? "needs-configuration"} /></div>
-          <p>The supplied read-only knowledge server is prefilled. Owner identity is verified before archive retrieval.</p>
-          {field("DISCORD_MCP_URL", "MCP endpoint")}
-          {field("DISCORD_MCP_API_KEY", status?.sources.discord.apiKeyStored ? "API key (stored)" : "API key", { secret: true, placeholder: "Leave blank if the server does not require one" })}
-          <div className="connection-row">{field("DISCORD_OWNER_USER_ID", "Your Discord user ID")}{field("DISCORD_OWNER_QUERY", "Owner verification query")}</div>
-          <button disabled={Boolean(busy)}>{busy === "Discord" ? "Saving..." : "Save Discord setup"}</button>
+          <p>{status?.sources.discord.apiKeyStored ? "OAuth access is connected. Owner details are still checked before archive retrieval." : "The supplied server supports automatic OAuth registration—no app key or token is required."}</p>
+          <details><summary>Owner verification</summary>
+            {field("DISCORD_MCP_URL", "MCP endpoint")}
+            <div className="connection-row">{field("DISCORD_OWNER_USER_ID", "Your Discord user ID")}{field("DISCORD_OWNER_QUERY", "Owner verification query")}</div>
+          </details>
+          <button className="oauth-button" disabled={Boolean(busy)}>
+            {busy === "Authorize Discord" ? "Waiting for Discord…" : status?.sources.discord.apiKeyStored ? "Reauthorize Discord" : "Authorize Discord"}
+          </button>
         </form>
 
         <form className="connection-card" onSubmit={(event) => void save("Obsidian", ["OBSIDIAN_VAULT_PATH", "OBSIDIAN_SCOPE_PATH"], [], event)}>
@@ -213,7 +310,7 @@ export function ConnectionsPanel() {
         </form>
       </div>
 
-      <p className="connections-footnote">Saving configuration does not read any messages. Source collection remains blocked until identity checks pass, and a final sync requires your explicit approval.</p>
+      <p className="connections-footnote">Authorization does not read any messages. Source collection remains blocked until identity checks pass, and a first sync requires your explicit approval.</p>
     </section>
   );
 }

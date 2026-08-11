@@ -1,0 +1,31 @@
+{
+  "display_information": {
+    "name": "Radar Personal Assistant",
+    "description": "Private read-only request triage for one user"
+  },
+  "oauth_config": {
+    "redirect_urls": [
+      "http://localhost:8790/oauth/slack/callback"
+    ],
+    "scopes": {
+      "user": [
+        "users:read",
+        "users:read.email",
+        "channels:read",
+        "channels:history",
+        "groups:read",
+        "groups:history",
+        "im:read",
+        "im:history",
+        "mpim:read",
+        "mpim:history"
+      ]
+    },
+    "pkce_enabled": true
+  },
+  "settings": {
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": true
+  }
+}

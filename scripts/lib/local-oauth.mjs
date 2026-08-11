@@ -170,7 +170,7 @@ export function createLocalOAuthManager({
       }, fetchImpl);
       exactOwner(expectedEmail, profile.emailAddress, "Gmail");
       updateLocalSettings({
-        values: { GMAIL_CONNECTED_EMAIL: profile.emailAddress },
+        values: { GMAIL_CONNECTED_EMAIL: profile.emailAddress, GMAIL_CONNECTED_AT: new Date(now()).toISOString() },
         secrets: { GMAIL_REFRESH_TOKEN: refreshToken },
       }, { environment, codec });
       return { provider: "google", email: profile.emailAddress };
@@ -196,6 +196,7 @@ export function createLocalOAuthManager({
       updateLocalSettings({
         values: {
           SLACK_CONNECTED_EMAIL: email,
+          SLACK_CONNECTED_AT: new Date(now()).toISOString(),
           SLACK_ACCESS_TOKEN_EXPIRES_AT: expiresAt(userToken.expires_in, now),
         },
         secrets: {
@@ -219,7 +220,7 @@ export function createLocalOAuthManager({
       }),
     }, fetchImpl);
     updateLocalSettings({
-      values: { DISCORD_ACCESS_TOKEN_EXPIRES_AT: expiresAt(token.expires_in, now) },
+      values: { DISCORD_ACCESS_TOKEN_EXPIRES_AT: expiresAt(token.expires_in, now), DISCORD_CONNECTED_AT: new Date(now()).toISOString() },
       secrets: {
         DISCORD_MCP_API_KEY: requireValue(token.access_token, "Discord authorization did not return an access token"),
         ...(token.refresh_token ? { DISCORD_REFRESH_TOKEN: token.refresh_token } : {}),

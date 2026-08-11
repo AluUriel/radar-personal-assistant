@@ -10,6 +10,7 @@ const SLACK_SCOPES = [
   "mpim:read", "mpim:history",
 ];
 const DISCORD_ISSUER = "https://discord-knowledge-mvp-production.up.railway.app/";
+const DISCORD_RESOURCE = `${DISCORD_ISSUER}mcp`;
 const FLOW_TTL_MS = 10 * 60 * 1000;
 
 function base64Url(buffer) {
@@ -132,6 +133,7 @@ export function createLocalOAuthManager({
         redirect_uri: flow.redirectUri,
         response_type: "code",
         scope: "mcp:read",
+        resource: DISCORD_RESOURCE,
         state: flow.state,
         code_challenge: flow.challenge,
         code_challenge_method: "S256",
@@ -219,6 +221,7 @@ export function createLocalOAuthManager({
         code_verifier: flow.verifier,
         grant_type: "authorization_code",
         redirect_uri: flow.redirectUri,
+        resource: DISCORD_RESOURCE,
       }),
     }, fetchImpl);
     updateLocalSettings({

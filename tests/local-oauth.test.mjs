@@ -81,8 +81,10 @@ test("Discord dynamically registers the local client and stores OAuth tokens", a
   const { directory, environment } = fixture();
   updateLocalSettings({ values: { RADAR_OWNER_EMAIL: "" } }, { environment, codec });
   let registrations = 0;
-  const fetchImpl = async (input) => {
+  const requests = [];
+  const fetchImpl = async (input, init = {}) => {
     const url = String(input);
+    requests.push({ url, init });
     if (url.endsWith(".well-known/oauth-authorization-server")) return Response.json({
       authorization_endpoint: "https://discord.example/authorize",
       token_endpoint: "https://discord.example/token",
@@ -96,12 +98,14 @@ test("Discord dynamically registers the local client and stores OAuth tokens", a
     const oauth = createLocalOAuthManager({ environment, codec, fetchImpl, now: () => 1_000 });
     const started = await oauth.start("discord");
     const authorization = new URL(started.authorizationUrl);
+    assert.equal(authorization.searchParams.get("resource"), "https://discord-knowledge-mvp-production.up.railway.app/mcp");
     await oauth.complete(`http://127.0.0.1:8790/oauth/discord/callback?code=discord-code&state=${authorization.searchParams.get("state")}`);
     const stored = readLocalSettings({ environment, codec });
     assert.equal(registrations, 1);
     assert.equal(stored.values.DISCORD_OAUTH_CLIENT_ID, "discord-client");
     assert.equal(stored.secrets.DISCORD_MCP_API_KEY, "discord-access");
     assert.equal(stored.secrets.DISCORD_REFRESH_TOKEN, "discord-refresh");
+    assert.equal(requests.some((request) => String(request.init.body).includes("resource=https%3A%2F%2Fdiscord-knowledge-mvp-production.up.railway.app%2Fmcp")), true);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

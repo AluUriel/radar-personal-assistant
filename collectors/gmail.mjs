@@ -30,10 +30,12 @@ function flattenParts(part) {
 }
 
 async function googleAccessToken({ clientId, clientSecret, refreshToken, fetchImpl }) {
+  const body = new URLSearchParams({ client_id: clientId, refresh_token: refreshToken, grant_type: "refresh_token" });
+  if (clientSecret) body.set("client_secret", clientSecret);
   const response = await fetchImpl("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken, grant_type: "refresh_token" }),
+    body,
   });
   if (!response.ok) throw new Error(`Google token refresh failed with HTTP ${response.status}`);
   const payload = await response.json();
@@ -164,7 +166,7 @@ export async function collectGmail({
 }
 
 async function main() {
-  const required = ["GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN", "RADAR_OWNER_EMAIL", "RADAR_URL", "RADAR_INGEST_SECRET"];
+  const required = ["GMAIL_CLIENT_ID", "GMAIL_REFRESH_TOKEN", "RADAR_OWNER_EMAIL", "RADAR_URL", "RADAR_INGEST_SECRET"];
   const missing = required.filter((name) => !process.env[name]);
   if (missing.length) throw new Error(`Missing environment variables: ${missing.join(", ")}`);
   const result = await collectGmail({

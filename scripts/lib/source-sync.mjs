@@ -9,7 +9,7 @@ export const collectorDefinitions = [
     id: "gmail",
     label: "Gmail and Intercom",
     script: "collectors/gmail.mjs",
-    required: ["RADAR_OWNER_EMAIL", "RADAR_URL", "RADAR_INGEST_SECRET", "GMAIL_CLIENT_ID", "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN"],
+    required: ["RADAR_OWNER_EMAIL", "RADAR_URL", "RADAR_INGEST_SECRET", "GMAIL_CLIENT_ID", "GMAIL_REFRESH_TOKEN"],
   },
   {
     id: "discord",
@@ -83,7 +83,7 @@ export function createCollectorProcessRunner({
       }
       const child = spawnImpl(execPath, [path.resolve(cwd, collector.script)], {
         cwd,
-        env: environment,
+        env: typeof environment === "function" ? environment() : environment,
         stdio: "inherit",
         windowsHide: true,
       });

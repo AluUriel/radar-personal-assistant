@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 import process from "node:process";
 import { createCollectorProcessRunner, runSourceSyncCycle, syncIntervalMilliseconds } from "./lib/source-sync.mjs";
+import { loadLocalSettingsEnvironment } from "./lib/local-settings.mjs";
+import { refreshOAuthAccessTokens } from "./lib/oauth-refresh.mjs";
 
 const watch = process.argv.includes("--watch");
 const requested = (process.env.RADAR_SYNC_SOURCES ?? "").split(",");
-const collectorRunner = createCollectorProcessRunner();
+let cycleEnvironment = process.env;
+const collectorRunner = createCollectorProcessRunner({ environment: () => cycleEnvironment });
 
 async function cycle() {
-  const results = await runSourceSyncCycle({ environment: process.env, requestedSources: requested, runCollector: collectorRunner.runCollector });
+  cycleEnvironment = loadLocalSettingsEnvironment(process.env, { preferStored: true });
+  cycleEnvironment = await refreshOAuthAccessTokens(cycleEnvironment);
+  const results = await runSourceSyncCycle({ environment: cycleEnvironment, requestedSources: requested, runCollector: collectorRunner.runCollector });
   console.log(JSON.stringify({ event: "radar-sync-cycle", completedAt: new Date().toISOString(), results }));
   return results;
 }

@@ -7,6 +7,7 @@ import {
   updateLocalSettings,
   windowsDpapiCodec,
 } from "./local-settings.mjs";
+import { createLocalOAuthManager } from "./local-oauth.mjs";
 
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -28,6 +29,26 @@ function send(response, status, payload) {
     "x-content-type-options": "nosniff",
   });
   response.end(JSON.stringify(payload));
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[character]);
+}
+
+function sendOAuthPage(response, result) {
+  const successful = result.ok;
+  const title = successful ? "Connection complete" : "Connection failed";
+  const detail = successful
+    ? `${result.provider === "google" ? "Gmail" : result.provider === "slack" ? "Slack" : "Discord"} is connected. You can close this window.`
+    : `${result.message} Close this window and try again from Radar.`;
+  response.writeHead(200, {
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "private, no-store",
+    "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'",
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "no-referrer",
+  });
+  response.end(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${title}</title><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#f7f7f3;color:#18201d;font:16px system-ui"><main style="max-width:520px;padding:40px;text-align:center"><div style="width:42px;height:42px;margin:0 auto 18px;display:grid;place-items:center;border-radius:12px;background:${successful ? "#466b54" : "#9b531f"};color:white;font-weight:800">${successful ? "✓" : "!"}</div><h1 style="font-size:26px">${title}</h1><p style="color:#6c746f;line-height:1.6">${escapeHtml(detail)}</p></main></body></html>`);
 }
 
 async function readJson(request) {
@@ -52,14 +73,16 @@ export function buildConnectionStatus(environment = process.env, options = {}) {
     sources: {
       slack: {
         state: secret("SLACK_ACCESS_TOKEN") ? "configured" : "needs-configuration",
-        oauthClientReady: Boolean(value("SLACK_CLIENT_ID") && secret("SLACK_CLIENT_SECRET")),
+        oauthClientReady: Boolean(value("SLACK_CLIENT_ID")),
         clientId: value("SLACK_CLIENT_ID"),
+        connectedEmail: value("SLACK_CONNECTED_EMAIL"),
         accessTokenStored: secret("SLACK_ACCESS_TOKEN"),
       },
       gmail: {
         state: secret("GMAIL_REFRESH_TOKEN") ? "configured" : "needs-configuration",
-        oauthClientReady: Boolean(value("GMAIL_CLIENT_ID") && secret("GMAIL_CLIENT_SECRET")),
+        oauthClientReady: Boolean(value("GMAIL_CLIENT_ID")),
         clientId: value("GMAIL_CLIENT_ID"),
+        connectedEmail: value("GMAIL_CONNECTED_EMAIL"),
         refreshTokenStored: secret("GMAIL_REFRESH_TOKEN"),
         query: value("GMAIL_QUERY"),
         intercomQuery: value("INTERCOM_GMAIL_QUERY"),
@@ -70,6 +93,7 @@ export function buildConnectionStatus(environment = process.env, options = {}) {
           : "needs-configuration",
         url: value("DISCORD_MCP_URL"),
         apiKeyStored: secret("DISCORD_MCP_API_KEY"),
+        oauthClientRegistered: Boolean(value("DISCORD_OAUTH_CLIENT_ID")),
         ownerUserId: value("DISCORD_OWNER_USER_ID"),
         ownerQuery: value("DISCORD_OWNER_QUERY"),
       },
@@ -106,6 +130,7 @@ export function createLocalSetupServer({
   secret = environment.RADAR_SETUP_SECRET,
   codec = windowsDpapiCodec,
   folderPicker = pickWindowsFolder,
+  fetchImpl = fetch,
 } = {}) {
   if (!secret?.trim()) throw new Error("RADAR_SETUP_SECRET is required");
   const radarOrigin = new URL(environment.RADAR_URL?.trim() || "http://localhost:3000");
@@ -113,7 +138,18 @@ export function createLocalSetupServer({
     radarOrigin.origin,
     `${radarOrigin.protocol}//${radarOrigin.hostname === "localhost" ? "127.0.0.1" : "localhost"}${radarOrigin.port ? `:${radarOrigin.port}` : ""}`,
   ]);
+  const oauth = createLocalOAuthManager({ environment, codec, fetchImpl });
   return http.createServer(async (request, response) => {
+    const url = new URL(request.url ?? "/", "http://127.0.0.1");
+    if (request.method === "GET" && oauth.callbackMatches(url)) {
+      try {
+        const result = await oauth.complete(url);
+        sendOAuthPage(response, { ok: true, ...result });
+      } catch (error) {
+        sendOAuthPage(response, { ok: false, message: error instanceof Error ? error.message : "Authorization could not be completed" });
+      }
+      return;
+    }
     const origin = request.headers.origin ?? "";
     const trustedBrowser = trustedOrigins.has(origin);
     if (trustedBrowser) {
@@ -132,7 +168,6 @@ export function createLocalSetupServer({
       return;
     }
     try {
-      const url = new URL(request.url ?? "/", "http://127.0.0.1");
       if (request.method === "GET" && url.pathname === "/health") {
         send(response, 200, { ok: true });
         return;
@@ -158,6 +193,16 @@ export function createLocalSetupServer({
         }
         const selected = folderPicker();
         send(response, 200, { selected: selected || null });
+        return;
+      }
+      const oauthStart = url.pathname.match(/^\/oauth\/(google|slack|discord)\/start$/);
+      if (request.method === "POST" && oauthStart) {
+        if (!request.headers["content-type"]?.startsWith("application/json")) {
+          send(response, 415, { error: "json-required" });
+          return;
+        }
+        await readJson(request);
+        send(response, 200, await oauth.start(oauthStart[1]));
         return;
       }
       send(response, 404, { error: "not-found" });

@@ -15,9 +15,14 @@ export const PUBLIC_SETTING_NAMES = Object.freeze([
   "OBSIDIAN_VAULT_PATH",
   "OBSIDIAN_SCOPE_PATH",
   "SLACK_CLIENT_ID",
+  "SLACK_CONNECTED_EMAIL",
+  "SLACK_ACCESS_TOKEN_EXPIRES_AT",
   "GMAIL_CLIENT_ID",
+  "GMAIL_CONNECTED_EMAIL",
   "GMAIL_QUERY",
   "INTERCOM_GMAIL_QUERY",
+  "DISCORD_OAUTH_CLIENT_ID",
+  "DISCORD_ACCESS_TOKEN_EXPIRES_AT",
   "OPENAI_MODEL",
 ]);
 
@@ -25,9 +30,11 @@ export const SECRET_SETTING_NAMES = Object.freeze([
   "RADAR_INGEST_SECRET",
   "DISCORD_MCP_API_KEY",
   "SLACK_ACCESS_TOKEN",
+  "SLACK_REFRESH_TOKEN",
   "SLACK_CLIENT_SECRET",
   "GMAIL_CLIENT_SECRET",
   "GMAIL_REFRESH_TOKEN",
+  "DISCORD_REFRESH_TOKEN",
   "OPENAI_API_KEY",
   "SIDECAR_SHARED_SECRET",
 ]);
@@ -170,8 +177,11 @@ export function ensureLocalInternalSecrets(options = {}) {
 }
 
 export function loadLocalSettingsEnvironment(environment = process.env, options = {}) {
-  const stored = ensureLocalInternalSecrets({ environment, ...options });
-  const merged = { ...DEFAULT_VALUES, ...stored.values, ...stored.secrets, ...environment };
+  const { preferStored = false, ...storageOptions } = options;
+  const stored = ensureLocalInternalSecrets({ environment, ...storageOptions });
+  const merged = preferStored
+    ? { ...DEFAULT_VALUES, ...environment, ...stored.values, ...stored.secrets }
+    : { ...DEFAULT_VALUES, ...stored.values, ...stored.secrets, ...environment };
   if (stored.secrets.SIDECAR_SHARED_SECRET) {
     merged.TEXT_GENERATOR_API_KEY ||= stored.secrets.SIDECAR_SHARED_SECRET;
     merged.TEXT_GENERATOR_URL ||= "http://127.0.0.1:8789/draft";

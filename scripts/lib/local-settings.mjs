@@ -14,6 +14,7 @@ export const PUBLIC_SETTING_NAMES = Object.freeze([
   "DISCORD_OWNER_QUERY",
   "OBSIDIAN_VAULT_PATH",
   "OBSIDIAN_SCOPE_PATH",
+  "SLACK_OWNER_EMAIL",
   "SLACK_CLIENT_ID",
   "SLACK_CONNECTED_EMAIL",
   "SLACK_CONNECTED_AT",
@@ -191,6 +192,7 @@ export function loadLocalSettingsEnvironment(environment = process.env, options 
     merged.SIDECAR_PORT ||= "8789";
     merged.SIDECAR_HOST ||= "127.0.0.1";
   }
+  merged.SLACK_OWNER_EMAIL ||= merged.RADAR_OWNER_EMAIL;
   return merged;
 }
 

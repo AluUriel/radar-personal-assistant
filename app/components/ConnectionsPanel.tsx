@@ -8,7 +8,7 @@ interface ConnectionStatus {
   storage: { protectedBy: string; location: string };
   owner: { email: string };
   sources: {
-    slack: { state: SourceState; oauthClientReady: boolean; clientId: string; connectedEmail: string; connectedAt: string; accessTokenStored: boolean };
+    slack: { state: SourceState; ownerEmail: string; oauthClientReady: boolean; clientId: string; connectedEmail: string; connectedAt: string; accessTokenStored: boolean };
     gmail: { state: SourceState; oauthClientReady: boolean; clientId: string; connectedEmail: string; connectedAt: string; refreshTokenStored: boolean; query: string; intercomQuery: string };
     discord: { state: SourceState; url: string; apiKeyStored: boolean; oauthClientRegistered: boolean; connectedAt: string; ownerUserId: string; ownerQuery: string };
     obsidian: { state: SourceState; vaultPath: string; scopePath: string };
@@ -27,6 +27,7 @@ type Values = Record<string, string>;
 
 const EMPTY_VALUES: Values = {
   RADAR_OWNER_EMAIL: "",
+  SLACK_OWNER_EMAIL: "",
   SLACK_CLIENT_ID: "",
   GMAIL_CLIENT_ID: "",
   GMAIL_QUERY: "in:anywhere -in:spam -in:trash",
@@ -81,6 +82,7 @@ export function ConnectionsPanel() {
     setValues((current) => ({
       ...current,
       RADAR_OWNER_EMAIL: next.owner.email,
+      SLACK_OWNER_EMAIL: next.sources.slack.ownerEmail,
       SLACK_CLIENT_ID: next.sources.slack.clientId,
       GMAIL_CLIENT_ID: next.sources.gmail.clientId,
       GMAIL_QUERY: next.sources.gmail.query,
@@ -167,8 +169,11 @@ export function ConnectionsPanel() {
     valueNames: string[],
     secretNames: string[] = [],
   ) {
-    if (provider !== "discord" && !values.RADAR_OWNER_EMAIL.trim()) {
-      setMessage(`Save your owner email before authorizing ${label}.`);
+    const ownerEmail = provider === "slack"
+      ? values.SLACK_OWNER_EMAIL.trim() || values.RADAR_OWNER_EMAIL.trim()
+      : values.RADAR_OWNER_EMAIL.trim();
+    if (provider !== "discord" && !ownerEmail) {
+      setMessage(`Save your ${provider === "slack" ? "Slack account" : "owner"} email before authorizing ${label}.`);
       return;
     }
     const popup = window.open("", `radar-${provider}-oauth`, "popup,width=560,height=720");
@@ -316,9 +321,10 @@ export function ConnectionsPanel() {
           <button disabled={Boolean(busy)}>{busy === "Identity" ? "Saving..." : "Save identity"}</button>
         </form>
 
-        <form className="connection-card" onSubmit={(event) => { event.preventDefault(); void authorize("slack", "Slack", ["SLACK_CLIENT_ID"]); }}>
+        <form className="connection-card" onSubmit={(event) => { event.preventDefault(); void authorize("slack", "Slack", ["SLACK_OWNER_EMAIL", "SLACK_CLIENT_ID"]); }}>
           <div className="connection-title"><div><b>S</b><h3>Slack</h3></div><StateBadge state={status?.sources.slack.state ?? "needs-configuration"} /></div>
           <p>{status?.sources.slack.connectedEmail ? `Connected as ${status.sources.slack.connectedEmail}.` : "Authorize read-only access in Slack. Radar verifies the approved account before saving the connection."}</p>
+          {field("SLACK_OWNER_EMAIL", "Slack account email", { placeholder: "alu@fffuego.com" })}
           <details open={!status?.sources.slack.oauthClientReady}><summary>One-time Slack app setup</summary>
             <p className="connection-help">Create an internal Slack app, enable PKCE, add <code>http://localhost:8790/oauth/slack/callback</code>, then paste only its public client ID.</p>
             {field("SLACK_CLIENT_ID", "Slack app client ID", { placeholder: "123456789.123456789" })}

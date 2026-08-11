@@ -218,12 +218,13 @@ export async function collectSlack({
 }
 
 async function main() {
-  const required = ["SLACK_ACCESS_TOKEN", "RADAR_OWNER_EMAIL", "RADAR_URL", "RADAR_INGEST_SECRET"];
+  const required = ["SLACK_ACCESS_TOKEN", "RADAR_URL", "RADAR_INGEST_SECRET"];
   const missing = required.filter((name) => !process.env[name]);
+  if (!process.env.SLACK_OWNER_EMAIL && !process.env.RADAR_OWNER_EMAIL) missing.push("SLACK_OWNER_EMAIL");
   if (missing.length) throw new Error(`Missing environment variables: ${missing.join(", ")}`);
   const result = await collectSlack({
     token: process.env.SLACK_ACCESS_TOKEN,
-    expectedEmail: process.env.RADAR_OWNER_EMAIL,
+    expectedEmail: process.env.SLACK_OWNER_EMAIL || process.env.RADAR_OWNER_EMAIL,
     lookbackDays: Number(process.env.SLACK_LOOKBACK_DAYS || 0),
     maxChannels: Number(process.env.SLACK_MAX_CHANNELS || 0),
     maxThreads: Number(process.env.SLACK_MAX_THREADS || 0),

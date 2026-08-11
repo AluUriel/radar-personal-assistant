@@ -74,6 +74,7 @@ export function buildConnectionStatus(environment = process.env, options = {}) {
     sources: {
       slack: {
         state: secret("SLACK_ACCESS_TOKEN") ? "configured" : "needs-configuration",
+        ownerEmail: value("SLACK_OWNER_EMAIL") || value("RADAR_OWNER_EMAIL"),
         oauthClientReady: Boolean(value("SLACK_CLIENT_ID")),
         clientId: value("SLACK_CLIENT_ID"),
         connectedEmail: value("SLACK_CONNECTED_EMAIL"),

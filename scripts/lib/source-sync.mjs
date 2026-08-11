@@ -3,7 +3,7 @@ export const collectorDefinitions = [
     id: "slack",
     label: "Slack",
     script: "collectors/slack.mjs",
-    required: ["RADAR_OWNER_EMAIL", "RADAR_URL", "RADAR_INGEST_SECRET", "SLACK_ACCESS_TOKEN"],
+    required: ["SLACK_OWNER_EMAIL", "RADAR_URL", "RADAR_INGEST_SECRET", "SLACK_ACCESS_TOKEN"],
   },
   {
     id: "gmail",
@@ -26,6 +26,9 @@ export const collectorDefinitions = [
 ];
 
 function hasValue(environment, name) {
+  if (name === "SLACK_OWNER_EMAIL") {
+    return Boolean((environment.SLACK_OWNER_EMAIL || environment.RADAR_OWNER_EMAIL)?.trim());
+  }
   return Boolean(environment[name]?.trim());
 }
 

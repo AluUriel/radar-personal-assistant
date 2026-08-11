@@ -18,6 +18,7 @@ function fixture() {
   updateLocalSettings({
     values: {
       RADAR_OWNER_EMAIL: "owner@example.com",
+      SLACK_OWNER_EMAIL: "slack-owner@example.com",
       GMAIL_CLIENT_ID: "google-client",
       SLACK_CLIENT_ID: "slack-client",
     },
@@ -58,7 +59,7 @@ test("Slack authorization requests read-only user scopes and verifies the exact 
     const url = String(input);
     if (url.includes("oauth.v2.access")) return Response.json({ ok: true, authed_user: { access_token: "slack-access", refresh_token: "slack-refresh", expires_in: 3600 } });
     if (url.includes("auth.test")) return Response.json({ ok: true, user_id: "U1", team_id: "T1" });
-    if (url.includes("users.info")) return Response.json({ ok: true, user: { profile: { email: "owner@example.com" } } });
+    if (url.includes("users.info")) return Response.json({ ok: true, user: { profile: { email: "slack-owner@example.com" } } });
     throw new Error(`Unexpected URL ${url}`);
   };
   try {
@@ -71,7 +72,7 @@ test("Slack authorization requests read-only user scopes and verifies the exact 
     const stored = readLocalSettings({ environment, codec });
     assert.equal(stored.secrets.SLACK_ACCESS_TOKEN, "slack-access");
     assert.equal(stored.secrets.SLACK_REFRESH_TOKEN, "slack-refresh");
-    assert.equal(stored.values.SLACK_CONNECTED_EMAIL, "owner@example.com");
+    assert.equal(stored.values.SLACK_CONNECTED_EMAIL, "slack-owner@example.com");
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
@@ -113,11 +114,11 @@ test("Discord dynamically registers the local client and stores OAuth tokens", a
 
 test("Google and Slack still require an owner email before authorization", async () => {
   const { directory, environment } = fixture();
-  updateLocalSettings({ values: { RADAR_OWNER_EMAIL: "" } }, { environment, codec });
+  updateLocalSettings({ values: { RADAR_OWNER_EMAIL: "", SLACK_OWNER_EMAIL: "" } }, { environment, codec });
   try {
     const oauth = createLocalOAuthManager({ environment, codec });
     await assert.rejects(oauth.start("google"), /Save your owner email/);
-    await assert.rejects(oauth.start("slack"), /Save your owner email/);
+    await assert.rejects(oauth.start("slack"), /Save your Slack account email/);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

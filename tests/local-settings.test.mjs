@@ -40,9 +40,10 @@ test("local settings encrypt secrets and keep them outside the project", () => {
 test("runtime settings include safe defaults, internal secrets, and explicit environment overrides", () => {
   const { directory, environment, codec } = fixture();
   try {
-    updateLocalSettings({ values: { OPENAI_MODEL: "stored-model" } }, { environment, codec });
+    updateLocalSettings({ values: { OPENAI_MODEL: "stored-model", RADAR_OWNER_EMAIL: "owner@example.com" } }, { environment, codec });
     const runtime = loadLocalSettingsEnvironment({ ...environment, OPENAI_MODEL: "environment-model" }, { codec });
     assert.equal(runtime.OPENAI_MODEL, "environment-model");
+    assert.equal(runtime.SLACK_OWNER_EMAIL, "owner@example.com");
     assert.equal(runtime.DISCORD_MCP_URL, "https://discord-knowledge-mvp-production.up.railway.app/mcp");
     assert.ok(runtime.RADAR_INGEST_SECRET);
     assert.equal(runtime.TEXT_GENERATOR_API_KEY, runtime.SIDECAR_SHARED_SECRET);

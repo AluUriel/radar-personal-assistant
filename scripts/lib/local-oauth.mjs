@@ -110,7 +110,7 @@ export function createLocalOAuthManager({
     }
 
     if (provider === "slack") {
-      requireValue(current.values.RADAR_OWNER_EMAIL, "Save your owner email before connecting an account");
+      requireValue(current.values.SLACK_OWNER_EMAIL || current.values.RADAR_OWNER_EMAIL, "Save your Slack account email before connecting an account");
       const clientId = requireValue(current.values.SLACK_CLIENT_ID, "Enter the PKCE-enabled Slack app client ID first");
       const flow = createFlow(provider, "http://localhost:8790/oauth/slack/callback");
       const url = new URL("https://slack.com/oauth/v2/authorize");
@@ -180,7 +180,7 @@ export function createLocalOAuthManager({
     }
 
     if (flow.provider === "slack") {
-      const expectedEmail = requireValue(current.values.RADAR_OWNER_EMAIL, "Owner email is not configured");
+      const expectedEmail = requireValue(current.values.SLACK_OWNER_EMAIL || current.values.RADAR_OWNER_EMAIL, "Slack account email is not configured");
       const token = await jsonRequest("https://slack.com/api/oauth.v2.access", {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },
